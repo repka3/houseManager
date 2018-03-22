@@ -1,1 +1,1 @@
-C:\Users\ln-e2\AppData\Local\Programs\Python\Python36-32\Scripts\pyuic5.exe shutdown.ui -o shut_compiled.py
+C:\Users\Sfranco\AppData\Local\Programs\Python\Python36-32\Scripts\pyuic5.exe shutdown.ui -o shut_compiled.py

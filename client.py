@@ -1,5 +1,5 @@
 from clientHouse import ClientHouse 
-import queue,time,_thread
+import queue,time,_thread,traceback
 
 
 def loopLookQueueMsg(q):
@@ -16,6 +16,8 @@ client=None
 try:
     client=ClientHouse(CLIENT_NAME,q,HOST,PORT)
     #_thread.start_new_thread( loopLookQueueMsg, (q, ) )
+    remoteclients=client.requestClientsList()
+    print("Clients:  {}".format(remoteclients))
     time.sleep(3)
     client.sendCmdToClient(CLIENT_NAME,"shutdown",(1800,))
     
@@ -23,6 +25,7 @@ try:
 
 except Exception as e:
     print(e)
+    traceback.print_exc()
 finally:
     if client:
         print("LOLOL DELETING CLIENT")
