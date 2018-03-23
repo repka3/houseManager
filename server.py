@@ -74,12 +74,11 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                     print("Socket ready. Get data.")
                     dictmsg = self.recvDict()
                     responseDict = self.handleClientMessageGetDictResponse(dictmsg)
-                    self.sendDict(responseDict)
-                self.releaseLock("ML")
 
                 if KILL_COND:
                     raise Exception("KILL_COND: General exit request, closing")
 
+                self.releaseLock("ML")
         except ClientProblem as e:
             print("Client problem:" + str(self.client_address) + " disconnect or error. Goodbye world!")
         except Exception as e:
