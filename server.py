@@ -163,9 +163,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print("Exception in sendJson: {}".format(e))
             raise e
-        finally:
-            # self.releaseLock("-sendJson-")
-            pass
+
 
     def recvDict(self, buffersize=4096):
         # self.acquireLock("-recvJson-")
@@ -189,9 +187,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
         except Exception as e:
             print("Unhandled Exception in recvJson: {}".format(e))
             raise e
-        finally:
-            # self.releaseLock("-recvJson-")
-            pass
+
 
     def createAckDict(self):
         data = {

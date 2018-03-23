@@ -14,37 +14,40 @@ class LoopThread(threading.Thread):
         self.gui = gui
 
     def run(self):
-        try:
             print("Starting loop thread")
             self.count = 0
             while True:
                 if self.gui.KILL_PLS:
+                    print("\n\nself.gui.KILL_PLS:True DIEE\n\n")
                     return
                 time.sleep(1)
                 self.gui.refreshTimerLaber()
+                try:
+                        if self.gui.clientHouse and self.gui.clientHouse.isConnected():
+                            print("We are connected to server.")
+                            self.gui.label_status.setText("Connected")
+                            self.gui.label_status.setStyleSheet(("QLabel {  color : green; }"))
+                            if self.count % 2 == 0:
+                                self.gui.updateClientList()
+                            else:
+                                self.gui.updateMessages()
 
-                if self.gui.clientHouse and self.gui.clientHouse.isConnected():
-                    print("We are connected to server.")
-                    self.gui.label_status.setText("Connected")
-                    self.gui.label_status.setStyleSheet(("QLabel {  color : gree; }"))
-                    if self.count % 2 == 0:
-                        self.gui.updateClientList()
-                    else:
-                        self.gui.updateMessages()
+                        else:
+                            print("Disconnected from server.")
+                            self.gui.model.clear()
+                            self.gui.label_status.setText("Disconnected")
+                            self.gui.label_status.setStyleSheet(("QLabel {  color : red; }"))
 
-                else:
-                    print("Disconnected from server.")
-                    self.gui.label_status.setText("Disconnected")
-                    self.gui.label_status.setStyleSheet(("QLabel {  color : red; }"))
+                        self.count = self.count + 1
+                        if self.count > 1000:
+                            self.count = 0
 
-                self.count = self.count + 1
-                if self.count > 1000:
-                    self.count = 0
-
-        except Exception as e:
-            print(e)
-        finally:
-            print("\nThread loop dead\n")
+                except Exception as e:
+                    print("\n\nMAIN LOOP EXCEPTION\n\n")
+                    print(e)
+                    traceback.print_exc()
+                finally:
+                    print("\nKeep looping\n")
 
 
 class MyFirstGuiProgram(Ui_MainWindow):
@@ -244,6 +247,7 @@ class MyFirstGuiProgram(Ui_MainWindow):
             self.clientHouse = ClientHouse(self.client_name, addr, int(self.PORT))
 
         except Exception as e:
+            self.displayInfoBox("Sorry can't connect to the server.")
             print("\n\nConnect to server exception.\n")
             print(e)
             traceback.print_exc()

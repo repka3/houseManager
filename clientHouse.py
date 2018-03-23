@@ -48,6 +48,8 @@ class ClientHouse(object):
             traceback.print_exc()
             self.__connected = False
             self.__del__()
+            print("Raising again in __init_ clientHouse")
+            raise e
 
     def __send_dict_get_dict(self, send_dict, buffersize=4096):
 
@@ -75,7 +77,6 @@ class ClientHouse(object):
             print(e)
             traceback.print_exc()
             self.__connected = False
-            self.__del__()
         finally:
             self.releaseLock("SendDictGetDict")
 
