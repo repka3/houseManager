@@ -4,6 +4,13 @@ from threading import Thread
 from pprint import pprint
 import json
 
+KILL_COND=False
+HOST = socket.gethostname()
+PORT_CLIENT_SERVER = 9500
+
+
+
+
 class SingletonMixin(object):
         __singleton_lock = threading.Lock()
         __singleton_instance = None
@@ -49,75 +56,13 @@ class SingletonMixin(object):
                         l.append(thisq['Name'])
                  return l
         
-
-        
 class ClientProblem(Exception):
     pass
-HOST = socket.gethostname()
-PORT_CLIENT_SERVER = 9500
-PORT_SERVER_CLIENT = 9501
-
-class ServerToClientThread(socketserver.BaseRequestHandler):
-         client_name=None
-         
-         def handle(self):
-                print("\n\n\n\n\nThread ServerToClientThread to serves addr:"+str(self.client_address))
-          
-                received = str(self.request.recv(2048), "utf-8")
-  
-                print("Client says : {}".format(received))
-                self.request.sendall(bytes("Hi client.Welcome i will send here stuffs for sure!" + "\n", "utf-8"))
-                self.name=received
-
-                if not self.name or len(self.name)<4:
-                        print("Wattafuck ho preso il nome ma non ho preso il nome !?!?!?")
-                        return
-                try:
-                    while True:
-                        
-                        q=SingletonMixin.instance().getQueueByName(str(self.name))
-                        if not q or q.empty():
-                            continue
-
-                        #print("we are about to get item")
-                        e=q.get()
-                        print("Item Got")
-                        if not e:
-                            print("daffaq?")
-                            raise Exception("Daffq? got and element from queue but Null?!?!??")
-                       
-                        
-                        while(e):
-                                    msg=json.dumps(e)
-                                    print("got element in queue for client{} msg:{} ....Sending to client".format(self.name,msg))
-                                    
-                                    self.request.sendall(bytes(msg + "\n", "utf-8"))
-                                    data = self.request.recv(4096)
-                                    
-                                    if data==b'':
-                                         raise ClientProblem("client disconnect?")
-                                    text = data.decode('utf-8')
-                                    print("Message back from client:{}".format(text))
-                                    if not q.empty():
-                                        e=q.get()
-                                    else:
-                                        e=None
-                    
-                     
-                except ClientProblem as e:
-                    print("Client:"+str(self.client_address)+" disconnect.Bye!")
-                except Exception as e:
-                    print("unhandled exception e:"+str(e))
-                finally:
-                    #self.KILL_MY_SON=True    
-                    if self.name:
-                       SingletonMixin.instance().destroyQueueByName(str(self.name))          
-                    self.request.close()
-                
+            
 class SingleTCPHandler(socketserver.BaseRequestHandler):
     "One instance per connection.  Override handle(self) to customize action."
     pseudo_name=None
-    KILL_MY_SON=False
+    DEBUG_LOCK=True
     L=threading.Lock()
 
     def handle(self):
@@ -131,25 +76,25 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                # print("ml acquired..")
                 ready = select.select([self.request], [], [], 1)
                 if ready[0]:
-                         data = self.request.recv(2048)       
-                if data==b'':
-                    raise ClientProblem("client disconnect?")
+                                
+                
                 if(data):
                     print("We have indeed some data on socket")
                     text = data.decode('utf-8')
-                    msg=json.loads(text); 
+                    msg=json.loads(text);
+                    if not msg:
+                            raise ClientProblem("Malformed client message. Closing.")        
                     pprint(msg)       
                     self.handleClientMessage(msg)   
                 self.L.release()
-                #print("ml released..")    
-                #self.handleQueue()
-                #if GENERAL_EXIT_REQUEST:
-                #   raise Exception("General exit request, closing")
+
+                if KILL_COND:
+                   raise Exception("KILL_COND: General exit request, closing")
                     
         except ClientProblem as e:
             print("Client:"+str(self.client_address)+" disconnect.Bye!")
         except Exception as e:
-            print("unhandled exception e:"+str(e))
+            print("unhandled exception in SingleTCPRequest e:"+str(e))
         finally:
             #self.KILL_MY_SON=True    
             if self.pseudo_name:
@@ -167,7 +112,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
             ##prob a work around, create queue now
             SingletonMixin.instance().getQueueByName(str(self.pseudo_name))
             print("Hello msg recv. Got client name:"+self.pseudo_name)
-            self.request.send('ACK'.encode('utf-8'))
+            
         else:
              if self.pseudo_name==None:
                  raise Exception("cant recv something before hello msg:"+str(msgDict))
@@ -189,18 +134,69 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                      msg=json.dumps(data)
                      self.request.send(msg.encode('utf-8'))
                      return
+
+     
                      
+     def sendJson(self,data):
+             #self.acquireLock("-sendJson-")
+             try:
+                    if not data or not data['msgtype']:
+                            raise Exception("Malformed data to send in socket")
+                    msg=json.dumps(data)
+                    if not msg:
+                            raise Exception("Cant convert data to json for send in socket")
+                    self.request.send(msg.encode('utf-8'))
+             except Exception as e:
+                     print("Exception in sendJson: {}".format(e))
+             finally:
+                     #self.releaseLock("-sendJson-")
+                     pass
+                
+     def recvJson(self,data,buffersize=4096):
+             #self.acquireLock("-recvJson-")
+             try:
+                    data = self.request.recv(buffersize) 
+                    if data==b'':
+                            raise ClientProblem("client disconnect?")
+                    if not data:
+                            raise ClientProblem("Nod data from client")
+                    text = data.decode('utf-8')
+                    msg=json.loads(text);
+                    
+             except Exception as e:
+                     print("Exception in recvJson: {}".format(e))
+             finally:
+                     #self.releaseLock("-recvJson-")
+                     pass
+                
+     def createAckDict(self):
+             data = {
+                      'msgtype': 'ACK'                   
+                    }
+             return data
+     def createNackDict(self):
+             data = {
+                      'msgtype': 'NACK'                   
+                    }
+             return data
+
+
+
+             
+     def acquireLock(self,msg):
+             if self.DEBUG_LOCK:
+                     print("Acquiring lock: {}".format(msg))
+             self.L.acquire()
+             if self.DEBUG_LOCK:
+                     print("Got       lock: {}".format(msg))
+     def releaseLock(self,msg):
+             if self.DEBUG_LOCK:
+                     print("Releasing lock: {}".format(msg))
+             self.L.release()
+             if self.DEBUG_LOCK:
+                     print("Free      lock: {}".format(msg))
         
 class SimpleServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
-    # Ctrl-C will cleanly kill all spawned threads
-    daemon_threads = True
-    # much faster rebinding
-    allow_reuse_address = True
-
-    def __init__(self, server_address, RequestHandlerClass):
-        socketserver.TCPServer.__init__(self, server_address, RequestHandlerClass)
-
-class ServerToClient(socketserver.ThreadingMixIn, socketserver.TCPServer):
     # Ctrl-C will cleanly kill all spawned threads
     daemon_threads = True
     # much faster rebinding
@@ -212,15 +208,11 @@ class ServerToClient(socketserver.ThreadingMixIn, socketserver.TCPServer):
 if __name__ == "__main__":
     print("Client->Server started. HOST:"+str(HOST)+" PORT:"+str(PORT_CLIENT_SERVER))
     server = SimpleServer((HOST, PORT_CLIENT_SERVER), SingleTCPHandler)
-    
-    print("Server->Client started. HOST:"+str(HOST)+" PORT:"+str(PORT_SERVER_CLIENT))
-    serverToclients=ServerToClient((HOST, PORT_SERVER_CLIENT), ServerToClientThread)
     # terminate with Ctrl-C
     try:
-        threading.Thread(target=server.serve_forever,daemon=True).start()
-        threading.Thread(target=serverToclients.serve_forever,daemon=True).start()
-        
-        print("All threads started.")
+        #threading.Thread(target=server.serve_forever,daemon=True).start()
+        server.serve_forever()
+        print("Should Not see this.")
         while True:
                pass
                time.sleep(1)
@@ -229,10 +221,9 @@ if __name__ == "__main__":
         print("Main server interrupted.")
         
     finally:
-        print("ALLOROR? R?Q?AS?AS?AS?")
+        print("Finally closing server.")
         server.shutdown()
         server.server_close()
-        serverToclients.shutdown()
-        serverToclients.server_close()
+       
         GENERAL_EXIT_REQUEST=True
-        os.kill(os.getpid(),signal.SIGTERM) # send myself sigterm
+        #os.kill(os.getpid(),signal.SIGTERM) # send myself sigterm
