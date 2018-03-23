@@ -1,37 +1,38 @@
 from PyQt5 import QtCore, QtGui, QtWidgets,Qt
 
 from shut_compiled import Ui_MainWindow
-import sys,queue,threading,time,os,datetime,json
+import sys, queue, threading, time, os, datetime, json, traceback
 from clientHouse import ClientHouse
 
 
 
 class LoopThread (threading.Thread):
    gui=None
+   count = 0
    def __init__(self, gui):
       threading.Thread.__init__(self)
       self.gui=gui
    def run(self):
            try:
                 print ("Starting loop thread")
+                self.count = 0
                 while True:
                         if self.gui.KILL_PLS:
                                 return
                         time.sleep(1)
                         self.gui.refreshTimerLaber()
-                        
-                        if self.gui.clientHouse and self.gui.clientHouse.connected:
+
+                        if self.gui.clientHouse and self.gui.clientHouse.isConnected():
+                            print("We are connected to server.")
                                 self.gui.label_status.setText("Connected")
                                 self.gui.label_status.setStyleSheet(("QLabel {  color : gree; }"))
-                                print("We are connected, lets update clients and check queue")
+                            if self.count % 2 == 0:
                                 self.gui.updateClientList()
-                                if self.gui.q.empty():
-                                        pass
                                 else:
-                                        print("We got some message for us!!!!")
-                                        self.gui.processItemsFromQueue()
-                                        
+                                    self.gui.updateMessages()
+
                         else:
+                            print("Disconnected from server.")
                                 self.gui.label_status.setText("Disconnected")
                                 self.gui.label_status.setStyleSheet(("QLabel {  color : red; }"))
                         '''        
@@ -39,6 +40,9 @@ class LoopThread (threading.Thread):
                                 self.gui.setSelectedClientByLastClientorClear()
                                 pass
                         '''
+                        self.count = self.count + 1
+                        if self.count > 1000:
+                            self.count = 0
            except Exception as e:
                    print(e)
                    
@@ -57,7 +61,6 @@ class MyFirstGuiProgram(Ui_MainWindow):
         timewillshutdown=-1
         connected_to_server=False
         lastClientNameSelected=None
-        ListLock=threading.Lock()
         oldClients=[]
                 
         def __init__(self, window):
@@ -72,6 +75,19 @@ class MyFirstGuiProgram(Ui_MainWindow):
                 self.selectmodel.flags=QtCore.QItemSelectionModel.ClearAndSelect
                 self.listView_clients.setSelectionModel(self.selectmodel)
                 self.listView_clients.selectionModel().selectionChanged.connect(self.selectClientChanges)
+
+                # adjust sizes
+                '''
+                self.pushButton_30.adjustSize()
+                self.pushButton_60.adjustSize()
+                self.pushButton_connect.adjustSize()
+                self.pushButton_minShutdown.adjustSize()
+                self.pushButton_refresh_clients.adjustSize()
+                self.pushButton_stop.adjustSize()
+                self.pushButton_remote_sd_custom.adjustSize()
+                self.pushButton_remote_sd_now.adjustSize()
+                self.pushButton_remote_sd_stop.adjustSize()
+                '''
 
                 #handle close application
                 self.pushButton_exit.clicked.connect(self.SafeCleanUp)
@@ -117,7 +133,6 @@ class MyFirstGuiProgram(Ui_MainWindow):
                 self.pushButton_remote_sd_stop.setEnabled(enable)
 
         def selectClientChanges(self):
-                self.ListLock.acquire()
                 print("selection changes")
                 selects=self.listView_clients.selectedIndexes()
                 #print(selects)
@@ -136,11 +151,11 @@ class MyFirstGuiProgram(Ui_MainWindow):
                 self.lastClientNameSelected=lab
                 #print(self.lastClientNameSelected)
                 '''
-                self.ListLock.release()
                 self.enableRemoteClientCommands(True)
                 
                 
         def SafeCleanUp(self):
+            print("Safe cleanup starting...")
                 self.KILL_PLS=True
                 if self.loopthread:
                         print("Loop Thread killing....")
@@ -155,6 +170,17 @@ class MyFirstGuiProgram(Ui_MainWindow):
         def closeEvent(self, event):            
                 self.SafeCleanUp()       
                 event.accept()
+
+        def updateMessages(self):
+            print("Updating messages through clientHouse")
+            c, msgs = self.clientHouse.requestClientMsgs()
+            if c == 0:
+                print("No messages to process.")
+                return
+            for m in msgs:
+                self.processRemoteCommand(m)
+
+
 
         def updateClientList(self):
                 print("Requesting clients through clientHouse")
@@ -188,13 +214,18 @@ class MyFirstGuiProgram(Ui_MainWindow):
                                 print("not valid params connection")
                                 return
                         self.client_name=client_name
-                        self.clientHouse=ClientHouse(self.client_name,self.q,addr,int(self.PORT),int(self.PORT)+1)
+                        self.clientHouse = ClientHouse(self.client_name, addr, int(self.PORT))
 
                 except Exception as e:
+                    print("\n\nConnect to server exception.\n")
                         print(e)
-                        
+                    traceback.print_exc()
+                    if self.clientHouse:
+                        self.clientHouse.__del__()
+                        self.clientHouse = None
                 finally:
                         pass
+
         def sendRemotestopPending(self):
             if not self.lastClientNameSelected:
                  print("No client selected")
@@ -216,15 +247,8 @@ class MyFirstGuiProgram(Ui_MainWindow):
                
               self.clientHouse.sendCmdToClient(self.lastClientNameSelected,"shutdown",(delasec,))
 
-        def processItemsFromQueue(self):
-   
-                 '''
-                  {"msgtype": "COMMAND", "command": "shutdown", "client_name": "DESKTOP-ALE", "for_client": "DESKTOP-ALE", "param0": 2700}
-                 '''
-                 while not self.q.empty():
-                    it=self.q.get()
-                    msg=json.loads(it)
-                    
+        def processRemoteCommand(self, msg):
+
                     if msg['for_client']!=self.client_name:
                        raise Exception("\nWATTTTAAAA\n ARE WE PROCESSING SOMETHING FOR ANOTHER ONE?!?!?!?!?!?!?!\n\n\n")
                      
@@ -232,14 +256,13 @@ class MyFirstGuiProgram(Ui_MainWindow):
                        delas=int(msg['param0'])
                        if delas<0:
                           print("Bad param0 for shutdown?")
-                          continue
+                          return
                        self.setLocalShutDown(delas)
-                    if msg['msgtype']=="COMMAND" and msg['command']=="stoppending":
+                    elif msg['msgtype'] == "COMMAND" and msg['command'] == "stoppending":
                        self.stopPendingShutdown()
+                    else:
+                        print("\n\n\nWARN: I dont know how to process this message: {}\n\n\n".format(msg))
 
-                 
-           
-           
         def stopPendingShutdown(self):
                 r=os.system("shutdown -a")
                 if r!=0:
@@ -285,18 +308,15 @@ class MyFirstGuiProgram(Ui_MainWindow):
                 if not self.lastClientNameSelected:
                    print("lastClient Not set")
                    return
-                  
-                self.ListLock.acquire()
-                l_item=self.model.findItems(self.lastClientNameSelected,Qt.Qt.MatchFixedString)
+
+                l_item = self.model.findItems(self.lastClientNameSelected, Qt.Qt.MatchFixedString)
                
                 if not l_item or len(l_item)!=1:
-                   self.ListLock.release()
                    print("list l_item not valid or more then one with same name in the list?!")
                    return
 
                 l_qindex=self.model.indexFromItem(l_item[0])
                 if not l_qindex:
-                   self.ListLock.release()
                    print(" qindex not valid or more then one with same name in the list?!")
                    return
                 self.listView_clients.selectionModel().select(l_qindex,QtCore.QItemSelectionModel.ClearAndSelect)
@@ -308,11 +328,8 @@ class MyFirstGuiProgram(Ui_MainWindow):
                 it=selects[0]
                 item=self.model.itemFromIndex(it)
                 print("Item selected text:{}".format(item.text()))
-                self.ListLock.release()                
-                        
-                
+
         def setClientsList(self,l):
-                self.ListLock.acquire()
                 self.model.removeRows( 0, self.model.rowCount() )
                 
                 for i in range(len(l)):
@@ -321,8 +338,8 @@ class MyFirstGuiProgram(Ui_MainWindow):
                          it.setText(c)
                          it.setSelectable(True)
                          self.model.appendRow(it)
-                self.ListLock.release()
- 
+
+
 if __name__ == '__main__':
     app = QtWidgets.QApplication(sys.argv)
     window = QtWidgets.QMainWindow()
