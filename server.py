@@ -67,18 +67,16 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
             while True:
                 jsonmsg = None
                 # print("ml acquiring..")
-                self.acquireLock("ML")
+                #self.acquireLock("ML")
                 # print("ml acquired..")
-                ready = select.select([self.request], [], [], 1)
-                if ready[0]:
-                    print("Socket ready. Get data.")
-                    dictmsg = self.recvDict()
-                    responseDict = self.handleClientMessageGetDictResponse(dictmsg)
-
+                print("Socket ready. Get data.")
+                dictmsg = self.recvDict()
+                responseDict = self.handleClientMessageGetDictResponse(dictmsg)
+                self.sendDict(responseDict)
                 if KILL_COND:
                     raise Exception("KILL_COND: General exit request, closing")
 
-                self.releaseLock("ML")
+                #self.releaseLock("ML")
         except ClientProblem as e:
             print("Client problem:" + str(self.client_address) + " disconnect or error. Goodbye world!")
         except Exception as e:
@@ -90,7 +88,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                 SingletonMixin.instance().destroy_queue_byname(str(self.pseudo_name))
             self.request.close()
             print("\nHandle singleTCPHandler dead.\n")
-            self.releaseLock("ML")
+            #self.releaseLock("ML")
 
     def handleClientMessageGetDictResponse(self, dictmsg):
 

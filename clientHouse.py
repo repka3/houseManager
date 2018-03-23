@@ -6,8 +6,8 @@ class NackResponse(Exception):
 
 
 class ClientHouse(object):
-    __DEBUG_LOCK_ = True
-    __DEBUG_SOCKETMSG_ = True
+    __DEBUG_LOCK_ = False
+    __DEBUG_SOCKETMSG_ = False
     __socket = None
     __server_addr = None
     __server_port = None
