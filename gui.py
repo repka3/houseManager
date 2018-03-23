@@ -208,7 +208,7 @@ class MyFirstGuiProgram(Ui_MainWindow):
 
 
     def updateClientList(self):
-        print("Requesting clients through clientHouse")
+        #print("Requesting clients through clientHouse")
         remoteclients = self.clientHouse.requestClientsList()
         NeedRefresh = True
         if not remoteclients:
@@ -300,8 +300,7 @@ class MyFirstGuiProgram(Ui_MainWindow):
 
 
     def setLocalShutDown(self, delasec):
-        if not delasec:
-            return
+
         if delasec == -1:
             customtime = self.lineEdit_shutdownTime.text()
             if len(customtime) < 1:
