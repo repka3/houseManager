@@ -215,13 +215,14 @@ class MyFirstGuiProgram(Ui_MainWindow):
             print("probably bad clients response so, just ignore it")
             return
         # check if we need to update GUI
-        if self.oldClients and len(self.oldClients) > 0:
-            for c in remoteclients:
-                if c in self.oldClients:
-                    NeedRefresh = False
-                else:
-                    NeedRefresh = True
-                    break
+        if self.oldClients:
+            newset=set(remoteclients).intersection(set(self.oldClients))
+            if len(newset)!=len(remoteclients):
+                print("refrsh")
+                NeedRefresh=True
+            else:
+                print("not refrsh")
+                NeedRefresh=True
 
         if NeedRefresh:
             self.oldClients = remoteclients
