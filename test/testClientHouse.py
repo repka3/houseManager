@@ -1,4 +1,4 @@
-from clientHouse import ClientHouse
+from lib.clientHouse import ClientHouse
 import time,traceback
 cond=True
 while (cond):

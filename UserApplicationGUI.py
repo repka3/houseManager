@@ -1,8 +1,8 @@
 from PyQt5 import QtCore, QtGui, QtWidgets, Qt
 
-from shut_compiled import Ui_MainWindow
-import sys, queue, threading, time, os, datetime, json, traceback
-from clientHouse import ClientHouse
+from gui.shut_compiled import Ui_MainWindow
+import sys, queue, threading, time, os, datetime, traceback
+from lib.clientHouse import ClientHouse
 
 
 class LoopThread(threading.Thread):
@@ -24,7 +24,7 @@ class LoopThread(threading.Thread):
                 self.gui.refreshTimerLaber()
                 try:
                         if self.gui.clientHouse and self.gui.clientHouse.isConnected():
-                            print("We are connected to server.")
+                            #print("We are connected to server.")
                             self.gui.label_status.setText("Connected")
                             self.gui.label_status.setStyleSheet(("QLabel {  color : green; }"))
                             if self.count % 2 == 0:
@@ -33,7 +33,7 @@ class LoopThread(threading.Thread):
                                 self.gui.updateMessages()
 
                         else:
-                            print("Disconnected from server.")
+                            #print("Disconnected from server.")
                             self.gui.model.clear()
                             self.gui.label_status.setText("Disconnected")
                             self.gui.label_status.setStyleSheet(("QLabel {  color : red; }"))
@@ -47,7 +47,8 @@ class LoopThread(threading.Thread):
                     print(e)
                     traceback.print_exc()
                 finally:
-                    print("\nKeep looping\n")
+                    #print("\nKeep looping\n")
+                    pass
 
 
 class MyFirstGuiProgram(Ui_MainWindow):
@@ -221,10 +222,10 @@ class MyFirstGuiProgram(Ui_MainWindow):
         if self.oldClients:
             newset=set(remoteclients).intersection(set(self.oldClients))
             if len(newset)!=len(remoteclients):
-                print("refrsh")
+                #print("refrsh")
                 NeedRefresh=True
             else:
-                print("not refrsh")
+                #print("not refrsh")
                 NeedRefresh=True
 
         if NeedRefresh:

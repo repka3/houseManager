@@ -1,11 +1,13 @@
-import socketserver, socket, queue, threading, select, time, traceback
-from pprint import pprint
-import json
+import socketserver, socket, queue, threading, time, traceback,json, datetime
 
 KILL_COND = False
 HOST = socket.gethostname()
 PORT_CLIENT_SERVER = 9500
 
+CONSOLE_PRINT=True
+def server_msg_(msg):
+    if CONSOLE_PRINT:
+        print("[{}] {}".format(datetime.datetime.now(),msg))
 
 class SingletonMixin(object):
     __singleton_lock = threading.Lock()
@@ -28,18 +30,18 @@ class SingletonMixin(object):
                 return this_queue['q']
         q = queue.Queue()
         self.list_queue.append({'Name': name, 'q': q})
-        print("Cant find queue for {}, creating new one.".format(name))
+        server_msg_("Cant find queue for {}, creating new one.".format(name))
         return q
 
     def destroy_queue_byname(self, name):
         for i in range(len(self.list_queue)):
             this_queue = self.list_queue[i]
             if this_queue['Name'] == name:
-                print("found the list for name {}. List was size={}".format(name, len(self.list_queue)))
+                server_msg_("found the list for name {}. List was size={}".format(name, len(self.list_queue)))
                 del self.list_queue[i]
-                print("now list size is:{}".format(len(self.list_queue)))
+                server_msg_("now list size is:{}".format(len(self.list_queue)))
                 return
-        print("Queue was not present for name:{},leaving as it was".format(name))
+                server_msg_("Queue was not present for name:{},leaving as it was".format(name))
 
     def get_all_queues_name(self):
         l = []
@@ -61,15 +63,15 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
     L = threading.Lock()
     count = 0
     def handle(self):
-        print("Thread spawned to serves addr:" + str(self.client_address))
+        server_msg_("Thread spawned to serves addr:" + str(self.client_address))
         self.count = 0
         try:
             while True:
                 jsonmsg = None
-                # print("ml acquiring..")
+                # server_msg_("ml acquiring..")
                 #self.acquireLock("ML")
-                # print("ml acquired..")
-                print("Socket ready. Get data.")
+                # server_msg_("ml acquired..")
+                #server_msg_("Socket ready. Get data.")
                 dictmsg = self.recvDict()
                 responseDict = self.handleClientMessageGetDictResponse(dictmsg)
                 self.sendDict(responseDict)
@@ -78,28 +80,28 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
 
                 #self.releaseLock("ML")
         except ClientProblem as e:
-            print("Client problem:" + str(self.client_address) + " disconnect or error. Goodbye world!")
+            server_msg_("Client problem:" + str(self.client_address) + " disconnect or error. Goodbye world!")
         except Exception as e:
-            print("unhandled exception in SingleTCPRequest e:" + str(e))
+            server_msg_("unhandled exception in SingleTCPRequest e:" + str(e))
             traceback.print_exc()
         finally:
             # self.KILL_MY_SON=True
             if self.pseudo_name:
                 SingletonMixin.instance().destroy_queue_byname(str(self.pseudo_name))
             self.request.close()
-            print("\nHandle singleTCPHandler dead.\n")
+            server_msg_("\nHandle singleTCPHandler dead.\n")
             #self.releaseLock("ML")
 
     def handleClientMessageGetDictResponse(self, dictmsg):
 
         if dictmsg['msgtype'] == "HELLO":
             if self.pseudo_name is not None:
-                print("Duplicate hello msg? oldname:" + self.pseudo_name)
+                server_msg_("Duplicate hello msg? oldname:" + self.pseudo_name)
                 return self.createNackDict("Duplicate HELLO msg.")
             self.pseudo_name = str(dictmsg['client_name']).strip()
             ##prob a work around, create queue now
             SingletonMixin.instance().get_queue_byname(self.pseudo_name)
-            print("Hello msg recv. Got client name: " + self.pseudo_name)
+            server_msg_("Hello msg recv. Got client name: " + self.pseudo_name)
             return self.createAckDict()
 
         else:
@@ -121,7 +123,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
                 for_client = str(dictmsg['for_client']).strip()
                 if not cmd or len(cmd) < 3:
                     return self.createNackDict("Bad for_client: {}".format(for_client))
-                print("\nWe got a command: {} for client:{}\n".format(cmd, for_client))
+                server_msg_("\nWe got a command: {} for client:{}\n".format(cmd, for_client))
                 q = SingletonMixin.instance().get_queue_byname(for_client)
                 q.put(dictmsg)
                 return self.createAckDict()
@@ -159,9 +161,9 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
             encoded = msg.encode('utf-8');
             self.request.send(encoded)
             if self.DEBUG_SOCKETMSG:
-                print("#SCK Sent:   {}".format(encoded))
+                server_msg_("#SCK Sent:   {}".format(encoded))
         except Exception as e:
-            print("Exception in sendJson: {}".format(e))
+            server_msg_("Exception in sendJson: {}".format(e))
             raise e
 
 
@@ -185,7 +187,7 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
         except ClientProblem as e:
             raise e
         except Exception as e:
-            print("Unhandled Exception in recvJson: {}".format(e))
+            server_msg_("Unhandled Exception in recvJson: {}".format(e))
             raise e
 
 
@@ -204,17 +206,17 @@ class SingleTCPHandler(socketserver.BaseRequestHandler):
 
     def acquireLock(self, msg):
         if self.DEBUG_LOCK:
-            print("Acquiring lock: {}".format(msg))
+            server_msg_("Acquiring lock: {}".format(msg))
         self.L.acquire()
         if self.DEBUG_LOCK:
-            print("Got       lock: {}".format(msg))
+            server_msg_("Got       lock: {}".format(msg))
 
     def releaseLock(self, msg):
         if self.DEBUG_LOCK:
-            print("Releasing lock: {}".format(msg))
+            server_msg_("Releasing lock: {}".format(msg))
         self.L.release()
         if self.DEBUG_LOCK:
-            print("Free      lock: {}".format(msg))
+            server_msg_("Free      lock: {}".format(msg))
 
 
 class SimpleServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
@@ -228,22 +230,16 @@ class SimpleServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
 
 
 if __name__ == "__main__":
-    print("Client->Server started. HOST:" + str(HOST) + " PORT:" + str(PORT_CLIENT_SERVER))
     server = SimpleServer((HOST, PORT_CLIENT_SERVER), SingleTCPHandler)
-    # terminate with Ctrl-C
+    server_msg_("Server created. Starting serve_forever.. HOST:" + str(HOST) + " PORT:" + str(PORT_CLIENT_SERVER))
     try:
         # threading.Thread(target=server.serve_forever,daemon=True).start()
         server.serve_forever()
-        print("Should Not see this.")
-        while True:
-            pass
-            time.sleep(1)
-
     except KeyboardInterrupt:
-        print("Main server interrupted.")
+        server_msg_("Main server interrupted.")
 
     finally:
-        print("Finally closing server.")
+        server_msg_("Finally closing server.")
         server.shutdown()
         server.server_close()
 

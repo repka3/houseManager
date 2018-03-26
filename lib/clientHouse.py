@@ -1,4 +1,4 @@
-import socket, threading, select, time, json, queue, traceback
+import socket, threading, json, traceback
 
 
 class NackResponse(Exception):
@@ -32,6 +32,7 @@ class ClientHouse(object):
         try:
             self.__socket.connect((self.__server_addr, self.__server_port))
             print("We are connected to the server. Sending HELLO..")
+            self.__connected = True
             ##now send hello msg
             data = {
                 'msgtype': 'HELLO',
@@ -40,19 +41,21 @@ class ClientHouse(object):
             r = self.__send_dict_get_dict(data)
             self.assertACKmsg(r)
             print("Handshake was good. Ready to use clientHouse")
-            self.__connected = True
+
 
         except Exception as e:
             print("\nException in init clientHouse\n")
             print(e)
-            traceback.print_exc()
+            #traceback.print_exc()
             self.__connected = False
-            self.__del__()
+            #self.__del__()
             print("Raising again in __init_ clientHouse")
             raise e
 
     def __send_dict_get_dict(self, send_dict, buffersize=4096):
-
+        if not self.__connected:
+            print("\n[__send_dict_get_dict] Im not connected, so i will not send shit on socket!\n")
+            return
         self.acquireLock("SendDictGetDict")
         try:
             jsonstring = json.dumps(send_dict)
@@ -75,8 +78,9 @@ class ClientHouse(object):
         except Exception as e:
             print("\n__send_dict_get_dict exception\n")
             print(e)
-            traceback.print_exc()
+            #traceback.print_exc()
             self.__connected = False
+            raise e
         finally:
             self.releaseLock("SendDictGetDict")
 
@@ -98,6 +102,7 @@ class ClientHouse(object):
             print(e)
             traceback.print_exc()
             self.__connected = False
+            raise e
         finally:
             pass
 
@@ -125,6 +130,7 @@ class ClientHouse(object):
             print(e)
             traceback.print_exc()
             self.__connected = False
+            raise e
         finally:
             pass
 
@@ -141,8 +147,15 @@ class ClientHouse(object):
                 'for_client': for_client
                 }
         data.update(a)
-        r = self.__send_dict_get_dict(data)
-        self.assertACKmsg(r)
+        try:
+            r = self.__send_dict_get_dict(data)
+            self.assertACKmsg(r)
+        except Exception as e:
+            print("\nsendCmdToClient exception\n")
+            print(e)
+            traceback.print_exc()
+            self.__connected = False
+            raise e
         return
 
     def acquireLock(self, func):
